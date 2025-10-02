@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coarlumini-backend
+  namespace: coarlumini
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coarlumini-backend
+  template:
+    metadata:
+      labels:
+        app: coarlumini-backend
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: backend-node  # Selecciona el nodo específico para Backend
+      containers:
+      - name: laravel-app
+        image: php:8.1-apache
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: app-code
+          mountPath: /var/www/html
+        env:
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: coarlumini-secrets
+              key: APP_KEY
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: APP_ENV
+        - name: APP_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: APP_DEBUG
+        - name: APP_URL
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: APP_URL
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: DB_PORT
+        - name: DB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: DB_DATABASE
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: coarlumini-secrets
+              key: DB_USERNAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: coarlumini-secrets
+              key: DB_PASSWORD
+        - name: CACHE_DRIVER
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: CACHE_DRIVER
+        - name: SESSION_DRIVER
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: SESSION_DRIVER
+        - name: QUEUE_CONNECTION
+          valueFrom:
+            configMapKeyRef:
+              name: coarlumini-config
+              key: QUEUE_CONNECTION
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      initContainers:
+      - name: init-app
+        image: busybox
+        command: ['sh', '-c', 'until nc -z coarlumini-database-service 3306; do echo waiting for database; sleep 2; done;']
+      volumes:
+      - name: app-code
+        persistentVolumeClaim:
+          claimName: backend-data-pvc

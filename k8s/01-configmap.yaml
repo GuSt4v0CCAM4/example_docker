@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coarlumini-config
+  namespace: coarlumini
+data:
+  APP_PORT: "80"
+  DB_HOST: "coarlumini-database-service"
+  DB_PORT: "3306"
+  DB_DATABASE: "coarlumini"
+  FRONTEND_HOST: "coarlumini-frontend-service"
+  APP_URL: "http://coarlumini-backend-service"
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  CACHE_DRIVER: "file"
+  SESSION_DRIVER: "file"
+  QUEUE_CONNECTION: "sync"
