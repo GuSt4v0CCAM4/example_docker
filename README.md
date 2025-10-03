@@ -1,4 +1,4 @@
-# COARLUMINI - Sistema de Gestión para Comité de Agua
+# COARLUMINI 
 
 ![Kubernetes](https://img.shields.io/badge/kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
 ![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
@@ -7,7 +7,7 @@
 
 ## Descripción
 
-COARLUMINI es un sistema integral de gestión para comités de agua potable rural, que permite administrar usuarios, registros de pagos, consumos y mantenimiento de infraestructura hidráulica. Este proyecto implementa una arquitectura de microservicios utilizando Kubernetes y Docker para garantizar alta disponibilidad, escalabilidad y facilidad de mantenimiento.
+Este proyecto implementa una arquitectura de microservicios utilizando Kubernetes y Docker para garantizar alta disponibilidad, escalabilidad y facilidad de mantenimiento.
 
 ## Arquitectura en Kubernetes
 
