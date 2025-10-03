@@ -15,10 +15,13 @@ use App\Http\Controllers\PersonController;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+Route::middleware("auth:sanctum")->get("/user", function (Request $request) {
     return $request->user();
 });
 
+// Health check endpoint para Kubernetes probes
+Route::get("/health", [\App\Http\Controllers\HealthController::class, "check"]);
+
 // Rutas para el registro de personas
-Route::get('/people', [PersonController::class, 'index']);
-Route::post('/people', [PersonController::class, 'store']);
+Route::get("/people", [PersonController::class, "index"]);
+Route::post("/people", [PersonController::class, "store"]);

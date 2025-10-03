@@ -89,7 +89,18 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          # Eliminadas las secciones de livenessProbe y readinessProbe
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
       initContainers:
         - name: init-app
           image: busybox

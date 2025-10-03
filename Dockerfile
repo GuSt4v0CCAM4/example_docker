@@ -1,7 +1,15 @@
-FROM php:8.1-apache
+FROM php:8.2-apache
 
 # Instalar dependencias
-RUN apt-get update && apt-get install -y     libpng-dev     libonig-dev     libxml2-dev     libzip-dev     zip     unzip     curl     git
+RUN apt-get update && apt-get install -y \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    curl \
+    git
 
 # Instalar extensiones PHP
 RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
@@ -18,6 +26,9 @@ RUN a2enmod rewrite
 # Directorio de trabajo
 WORKDIR /var/www/html
 
+# Configurar Git para que confíe en el directorio del proyecto
+RUN git config --global --add safe.directory /var/www/html
+
 # Copiar archivos de la aplicación
 COPY . .
 
@@ -29,11 +40,6 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 
 # Exponer puerto
 EXPOSE 80
-
-# Script de inicio
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-ENTRYPOINT ["docker-entrypoint.sh"]
 
 # Comando para iniciar Apache
 CMD ["apache2-foreground"]

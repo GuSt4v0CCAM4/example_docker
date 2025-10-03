@@ -34,7 +34,18 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "300m"
-          # Eliminadas las secciones de livenessProbe y readinessProbe
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
       volumes:
         - name: frontend-data
           persistentVolumeClaim:
