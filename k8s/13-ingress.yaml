@@ -10,10 +10,19 @@ spec:
   rules:
     - http:
         paths:
+          # Frontend
           - path: /
             pathType: Prefix
             backend:
               service:
                 name: coarlumini-frontend-service
+                port:
+                  number: 80
+          # Backend Laravel
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: coarlumini-backend-service
                 port:
                   number: 80

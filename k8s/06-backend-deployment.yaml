@@ -15,12 +15,9 @@ spec:
     spec:
       containers:
         - name: laravel-app
-          image: php:8.1-apache
+          image: gcr.io/cloudcomputingunsa/coarlumini-backend:latest
           ports:
             - containerPort: 80
-          volumeMounts:
-            - name: app-code
-              mountPath: /var/www/html
           env:
             - name: APP_KEY
               valueFrom:
@@ -89,7 +86,6 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
-          # Eliminadas las secciones de livenessProbe y readinessProbe
       initContainers:
         - name: init-app
           image: busybox
@@ -99,7 +95,3 @@ spec:
               "-c",
               "until nc -z coarlumini-database-service 3306; do echo waiting for database; sleep 2; done;",
             ]
-      volumes:
-        - name: app-code
-          persistentVolumeClaim:
-            claimName: backend-data-pvc
