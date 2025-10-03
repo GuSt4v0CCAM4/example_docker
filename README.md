@@ -1,61 +1,207 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# COARLUMINI - Sistema de Gestión para Comité de Agua
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+![Kubernetes](https://img.shields.io/badge/kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
+![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white)
 
-## About Laravel
+## Descripción
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+COARLUMINI es un sistema integral de gestión para comités de agua potable rural, que permite administrar usuarios, registros de pagos, consumos y mantenimiento de infraestructura hidráulica. Este proyecto implementa una arquitectura de microservicios utilizando Kubernetes y Docker para garantizar alta disponibilidad, escalabilidad y facilidad de mantenimiento.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Arquitectura en Kubernetes
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+El sistema está desplegado en Google Kubernetes Engine (GKE) con la siguiente estructura:
 
-## Learning Laravel
+```mermaid
+graph TD
+    A[Ingress] --> B[Frontend Service]
+    A --> C[Backend Service]
+    B --> D[Frontend Deployment]
+    C --> E[Backend Deployment]
+    E --> F[Database Service]
+    F --> G[Database Deployment]
+    G --> H[Persistent Storage]
+    E --> I[Backend Storage]
+    D --> J[Frontend Storage]
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Componentes en Kubernetes
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+- **Namespace**: Todos los recursos están aislados en el namespace `coarlumini`
+- **ConfigMaps y Secrets**: Almacenan configuraciones y credenciales
+- **Deployments**: Manejan los pods para Frontend, Backend y Base de datos
+- **Services**: Exponen los deployments internamente y a través del ingress
+- **PersistentVolumeClaims**: Aseguran persistencia de datos
+- **Ingress**: Gestiona el tráfico externo hacia la aplicación
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Contenedores Docker
 
-## Laravel Sponsors
+El proyecto utiliza tres contenedores principales:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Frontend (Vue.js + Nginx)
 
-### Premium Partners
+```dockerfile
+# Contenedor basado en nginx:stable-alpine
+# Sirve la aplicación Vue.js compilada
+# Se comunica con el backend a través de proxy inverso
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Backend (Laravel + PHP-FPM + Nginx)
 
-## Contributing
+```dockerfile
+# Contenedor multi-stage:
+# 1. Build con Composer
+# 2. PHP-FPM con Nginx para servir Laravel
+# Incluye todas las extensiones PHP necesarias
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Database (MySQL)
 
-## Code of Conduct
+```dockerfile
+# Contenedor MySQL con configuración optimizada
+# Almacenamiento persistente mediante volúmenes
+# Respaldos automatizados
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+## Despliegue en GKE
 
-## Security Vulnerabilities
+### Prerrequisitos
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- Google Cloud SDK
+- kubectl
+- Docker
+- Acceso a un proyecto GCP
 
-## License
+### Pasos para desplegar
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+1. **Preparar entorno local**
+   ```bash
+   # Clonar el repositorio
+   git clone https://github.com/username/coarlumini.git
+   cd coarlumini
+   ```
+
+2. **Construir y subir imágenes**
+   ```bash
+   # Ejecutar script de construcción
+   cd k8s
+   ./build-images.sh
+   ```
+
+3. **Desplegar en Kubernetes**
+   ```bash
+   # Conectarse al cluster
+   gcloud container clusters get-credentials cluster-name --zone zone --project project-id
+
+   # Aplicar manifiestos en orden
+   kubectl apply -f 00-namespace.yaml
+   kubectl apply -f 01-configmap.yaml
+   kubectl apply -f 02-secrets.yaml
+   kubectl apply -f 03-database-pvc.yaml
+   kubectl apply -f 04-database-deployment.yaml
+   kubectl apply -f 05-database-service.yaml
+   kubectl apply -f 06-backend-deployment.yaml
+   kubectl apply -f 07-backend-pvc.yaml
+   kubectl apply -f 08-backend-service.yaml
+   kubectl apply -f 09-frontend-deployment.yaml
+   kubectl apply -f 10-frontend-pvc.yaml
+   kubectl apply -f 11-nginx-config.yaml
+   kubectl apply -f 12-frontend-service.yaml
+   kubectl apply -f 13-ingress.yaml
+
+   # O aplicar todos a la vez
+   kubectl apply -f k8s/
+   ```
+
+4. **Verificar el despliegue**
+   ```bash
+   # Verificar pods
+   kubectl get pods -n coarlumini
+
+   # Verificar servicios
+   kubectl get services -n coarlumini
+
+   # Obtener la IP del ingress
+   kubectl get ingress -n coarlumini
+   ```
+
+## Escalabilidad
+
+El sistema está diseñado para escalar horizontal y verticalmente:
+
+- **Escalado Horizontal**: Aumentar número de réplicas para cada componente
+  ```bash
+  kubectl scale deployment coarlumini-frontend --replicas=3 -n coarlumini
+  kubectl scale deployment coarlumini-backend --replicas=3 -n coarlumini
+  ```
+
+- **Autoscaling**: Configurado para escalar automáticamente basado en uso de CPU
+  ```yaml
+  apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata:
+    name: coarlumini-backend-hpa
+  spec:
+    scaleTargetRef:
+      kind: Deployment
+      name: coarlumini-backend
+    minReplicas: 1
+    maxReplicas: 5
+    metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  ```
+
+- **Base de datos**: Configurada para escalabilidad vertical y replicación
+
+## Monitoreo y Mantenimiento
+
+- **Logs**: Accesibles mediante kubectl
+  ```bash
+  kubectl logs deployment/coarlumini-backend -n coarlumini
+  ```
+
+- **Estado de pods**:
+  ```bash
+  kubectl get pods -n coarlumini
+  kubectl describe pod [nombre-del-pod] -n coarlumini
+  ```
+
+- **Shell a contenedores**:
+  ```bash
+  kubectl exec -it [nombre-del-pod] -n coarlumini -- /bin/bash
+  ```
+
+## Desarrollo Local
+
+Para desarrollo local, puedes usar Docker Compose:
+
+```bash
+# Clonar el repositorio
+git clone https://github.com/username/coarlumini.git
+cd coarlumini
+
+# Iniciar el entorno
+docker-compose up -d
+
+# Acceder a la aplicación
+# Frontend: http://localhost
+# Backend API: http://localhost/api
+```
+
+## Ventajas de la Arquitectura
+
+- **Alta disponibilidad**: La aplicación está distribuida en múltiples nodos
+- **Escalabilidad**: Puede manejar aumentos de tráfico automáticamente
+- **Recuperación automática**: Kubernetes reinicia pods en caso de fallos
+- **Despliegue sin tiempo de inactividad**: Actualizaciones graduales sin interrupciones
+- **Gestión eficiente de recursos**: Optimización automática de recursos del cluster
+
+## Licencia
+
+Este proyecto está licenciado bajo la licencia MIT - ver el archivo LICENSE para más detalles.
