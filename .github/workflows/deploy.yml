@@ -9,6 +9,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+  repository_dispatch: # ← Agregar esto
+    types: [deploy-app]
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
