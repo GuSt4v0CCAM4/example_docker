@@ -1,0 +1,249 @@
+name: Deploy Laravel to GKE
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  GAR_LOCATION: ${{ secrets.GAR_LOCATION }}
+  GAR_REPOSITORY: ${{ secrets.GAR_REPOSITORY }}
+  IMAGE_NAME: coarlumini-backend
+  DEPLOYMENT_NAME: coarlumini-backend
+  NAMESPACE: coarlumini
+
+jobs:
+  deploy-laravel:
+    name: Build and Deploy Laravel to GKE
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      # ========================================
+      # 1. CHECKOUT DEL CÓDIGO
+      # ========================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ========================================
+      # 2. CONFIGURAR GOOGLE CLOUD
+      # ========================================
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      # ========================================
+      # 3. CONFIGURAR DOCKER PARA GAR
+      # ========================================
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+      # ========================================
+      # 4. BUILD DE LA IMAGEN DOCKER
+      # ========================================
+      - name: Build Docker image
+        run: |
+          docker build \
+            --tag "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" \
+            --tag "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest" \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            .
+
+      # ========================================
+      # 5. PUSH DE LA IMAGEN A GAR
+      # ========================================
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest"
+
+      # ========================================
+      # 6. OBTENER CREDENCIALES DEL CLÚSTER GKE
+      # ========================================
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --zone ${{ env.GKE_ZONE }} \
+            --project ${{ env.PROJECT_ID }}
+
+      # ========================================
+      # 7. VERIFICAR CONECTIVIDAD CON EL CLÚSTER
+      # ========================================
+      - name: Verify cluster connectivity
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      # ========================================
+      # 8. ACTUALIZAR MANIFIESTOS CON LA NUEVA IMAGEN
+      # ========================================
+      - name: Update Kubernetes manifests with new image
+        run: |
+          # Actualizar el deployment del backend con la nueva imagen
+          sed -i "s|image: gcr.io/.*|image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/06-backend-deployment.yaml
+
+          # Verificar el cambio
+          echo "=== Verificando imagen actualizada en el manifest ==="
+          grep "image:" k8s/06-backend-deployment.yaml
+
+      # ========================================
+      # 9. APLICAR MANIFIESTOS DE KUBERNETES
+      # ========================================
+      - name: Apply Kubernetes manifests
+        run: |
+          echo "=== Aplicando configuraciones base ==="
+          kubectl apply -f k8s/00-namespace.yaml
+          kubectl apply -f k8s/01-configmap.yaml
+          kubectl apply -f k8s/02-secrets.yaml
+          kubectl apply -f k8s/11-nginx-config.yaml
+
+          echo "=== Aplicando PVCs ==="
+          kubectl apply -f k8s/03-database-pvc.yaml
+          kubectl apply -f k8s/07-backend-pvc.yaml
+          kubectl apply -f k8s/10-frontend-pvc.yaml
+
+          echo "=== Aplicando base de datos ==="
+          kubectl apply -f k8s/04-database-deployment.yaml
+          kubectl apply -f k8s/05-database-service.yaml
+
+          echo "=== Esperando a que la base de datos esté lista ==="
+          kubectl wait --namespace=${{ env.NAMESPACE }} \
+            --for=condition=ready pod \
+            --selector=app=coarlumini-database \
+            --timeout=300s || echo "Database timeout - continuing anyway"
+
+          echo "=== Aplicando backend (Laravel) ==="
+          kubectl apply -f k8s/06-backend-deployment.yaml
+          kubectl apply -f k8s/08-backend-service.yaml
+
+          echo "=== Aplicando frontend ==="
+          kubectl apply -f k8s/09-frontend-deployment.yaml
+          kubectl apply -f k8s/12-frontend-service.yaml
+
+          echo "=== Aplicando Ingress ==="
+          kubectl apply -f k8s/13-ingress.yaml
+
+          echo "=== Aplicando HPA si existe ==="
+          kubectl apply -f k8s/14-horizontal-escal 2>/dev/null || echo "HPA file not found or invalid"
+
+      # ========================================
+      # 10. FORZAR ROLLOUT DEL DEPLOYMENT
+      # ========================================
+      - name: Force rollout restart
+        run: |
+          kubectl rollout restart deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }}
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.NAMESPACE }} --timeout=5m
+
+      # ========================================
+      # 11. EJECUTAR MIGRACIONES DE LARAVEL
+      # ========================================
+      - name: Run Laravel migrations
+        run: |
+          # Esperar a que el pod esté listo
+          kubectl wait --namespace=${{ env.NAMESPACE }} \
+            --for=condition=ready pod \
+            --selector=app=coarlumini-backend \
+            --timeout=300s
+
+          # Obtener el nombre del pod
+          POD_NAME=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=coarlumini-backend -o jsonpath="{.items[0].metadata.name}")
+
+          echo "Ejecutando migraciones en pod: $POD_NAME"
+
+          # Ejecutar migraciones
+          kubectl exec -n ${{ env.NAMESPACE }} $POD_NAME -- php artisan migrate --force
+
+          # Limpiar cache (opcional)
+          kubectl exec -n ${{ env.NAMESPACE }} $POD_NAME -- php artisan config:cache
+          kubectl exec -n ${{ env.NAMESPACE }} $POD_NAME -- php artisan route:cache
+          kubectl exec -n ${{ env.NAMESPACE }} $POD_NAME -- php artisan view:cache
+
+      # ========================================
+      # 12. VERIFICAR ESTADO DEL DESPLIEGUE
+      # ========================================
+      - name: Verify deployment status
+        run: |
+          echo "=== Pods en el namespace ${{ env.NAMESPACE }} ==="
+          kubectl get pods -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "=== Services en el namespace ${{ env.NAMESPACE }} ==="
+          kubectl get svc -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "=== Ingress en el namespace ${{ env.NAMESPACE }} ==="
+          kubectl get ingress -n ${{ env.NAMESPACE }}
+
+          echo ""
+          echo "=== HPA (Horizontal Pod Autoscaler) ==="
+          kubectl get hpa -n ${{ env.NAMESPACE }} || echo "No HPA configured"
+
+      # ========================================
+      # 13. OBTENER URL DE ACCESO
+      # ========================================
+      - name: Get application URL
+        run: |
+          echo "=== Esperando IP del Ingress (puede tardar unos minutos) ==="
+          sleep 30
+
+          INGRESS_IP=$(kubectl get ingress -n ${{ env.NAMESPACE }} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+
+          if [ "$INGRESS_IP" != "pending" ] && [ -n "$INGRESS_IP" ]; then
+            echo "✅ Aplicación desplegada exitosamente"
+            echo "🌐 Frontend: http://$INGRESS_IP"
+            echo "🔌 API: http://$INGRESS_IP/api"
+          else
+            echo "⏳ IP del Ingress aún no asignada. Verifica más tarde con:"
+            echo "   kubectl get ingress -n ${{ env.NAMESPACE }}"
+          fi
+
+      # ========================================
+      # 14. LOGS DEL DEPLOYMENT (EN CASO DE ERROR)
+      # ========================================
+      - name: Show backend logs on failure
+        if: failure()
+        run: |
+          echo "=== Logs del backend (últimas 50 líneas) ==="
+          kubectl logs -n ${{ env.NAMESPACE }} -l app=coarlumini-backend --tail=50 || true
+
+          echo ""
+          echo "=== Descripción de los pods del backend ==="
+          kubectl describe pods -n ${{ env.NAMESPACE }} -l app=coarlumini-backend || true
+
+          echo ""
+          echo "=== Eventos del namespace ==="
+          kubectl get events -n ${{ env.NAMESPACE }} --sort-by='.lastTimestamp' || true
+
+      # ========================================
+      # 15. NOTIFICACIÓN DE ÉXITO
+      # ========================================
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "✅ DESPLIEGUE COMPLETADO EXITOSAMENTE"
+          echo "════════════════════════════════════════════════════════"
+          echo "📦 Imagen: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "🎯 Commit: ${{ github.sha }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "⏰ Tiempo: $(date)"
+          echo "════════════════════════════════════════════════════════"
