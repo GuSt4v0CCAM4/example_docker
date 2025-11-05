@@ -15,8 +15,8 @@ on:
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GKE_CLUSTER: ${{ secrets.GKE_CLUSTER_NAME }}
-  GKE_ZONE: us-central1-a
-  GAR_LOCATION: us-central1
+  GKE_ZONE: ${{ secrets.GKE_ZONE }}
+  GAR_LOCATION: ${{ secrets.GAR_LOCATION }}
   GAR_REPOSITORY: ${{ secrets.GAR_REPOSITORY }}
   IMAGE_NAME: coarlumini-backend
   DEPLOYMENT_NAME: coarlumini-backend
