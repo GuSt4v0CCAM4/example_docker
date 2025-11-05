@@ -7,7 +7,7 @@
 
 ## Descripción
 
-Este proyecto implementa una arquitectura de microservicios utilizando Kubernetes y Docker para garantizar alta disponibilidad, escalabilidad y facilidad de mantenimiento.
+ACEste proyecto implementa una arquitectura de microservicios utilizando Kubernetes y Docker para garantizar alta disponibilidad, escalabilidad y facilidad de mantenimiento.
 
 ## Arquitectura en Kubernetes
 
